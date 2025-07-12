@@ -4,15 +4,13 @@ import requests
 class YunchengjiAPI:
     def __init__(self,session_id:str):
         # URL
-        self.login_url_1 = "https://www.yunchengji.net/app/login?j_username={}&j_password={}"
-        self.login_url_2 = "https://www.yunchengji.net/app/student/login"
+        self.login_url = "https://www.yunchengji.net/app/login?j_username={}&j_password={}"
         self.index_url = "https://www.yunchengji.net/app/student/index"
         self.total_url = "https://www.yunchengji.net/app/student/cj/report-total?seid={}"
         self.subject_list_url = "https://www.yunchengji.net/app/student/cj/subject-list?seid={}"
         self.subject_url = "https://www.yunchengji.net/app/student/cj/report-subject?seid={}&subjectid={}"
         self.question_list_url = "https://www.yunchengji.net/app/student/cj/question-list?seid={}&subjectid={}"
-        self.logout_url_1 = "https://www.yunchengji.net/app/logout"
-        self.logout_url_2 = "https://www.yunchengji.net/app/student/session/sessionout"
+        self.logout_url = "https://www.yunchengji.net/app/logout"
         # Headers
         self.user_agent_1 = "ycj/5.7.0(Android;12)<okhttp>(<okhttp/3.10.0>)<brand_HONOR,model_SDY-AN00,maker_HONOR,device_Sandy>"
         self.user_agent_2 = "Mozilla/5.0 (Linux; Android 12; SDY-AN00 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/89.0.4389.72 MQQBrowser/6.2 TBS/046295 Mobile Safari/537.36"
@@ -44,7 +42,7 @@ class YunchengjiAPI:
         :return: None
         """
         
-        response1 = self.session.post(self.login_url_1.format(username,password), headers={**self.headers1, 'content-length': "0"})
+        response1 = self.session.post(self.login_url.format(username, password), headers={**self.headers1, 'content-length': "0"})
         if response1.url == 'https://www.yunchengji.net/app/student/session/fail':
             return -1
         return 0
@@ -55,9 +53,6 @@ class YunchengjiAPI:
         :return:exams
         """
         response = self.session.post(self.index_url, headers={**self.headers1, 'httpcache': "index", 'content-length': "0"})
-        if response.json()['result'] == 'sessionout':
-            print('用户名或密码错误')
-            return -1
         result = response.json()['desc']['selist']
         return result
 
@@ -110,6 +105,5 @@ class YunchengjiAPI:
         登出
         :return: session_id
         """
-        self.session.post(self.logout_url_1, headers={**self.headers1, 'content-length': "0"})
-        response = self.session.get(self.logout_url_2, headers=self.headers1)
-        return response.cookies.get('SESSIONID')
+        self.session.post(self.logout_url, headers={**self.headers1, 'content-length': "0"})
+        return self.session.cookies.get('SESSIONID',domain='www.yunchengji.net')
