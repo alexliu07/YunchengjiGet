@@ -5,6 +5,7 @@ class YunchengjiAPI:
     def __init__(self,session_id:str):
         # URL
         self.login_url = "https://www.yunchengji.net/app/login?j_username={}&j_password={}"
+        self.user_info_url = "https://www.yunchengji.net/app/student/user/index"
         self.index_url = "https://www.yunchengji.net/app/student/index"
         self.total_url = "https://www.yunchengji.net/app/student/cj/report-total?seid={}"
         self.subject_list_url = "https://www.yunchengji.net/app/student/cj/subject-list?seid={}"
@@ -34,20 +35,28 @@ class YunchengjiAPI:
         self.session.cookies = requests.utils.cookiejar_from_dict({"SESSIONID": session_id})
 
 
-    def login(self,username,password):
+    def login(self,username:str,password:str)->int:
         """
         登录系统
         :param username: 用户名
         :param password: 密码
-        :return: None
+        :return: -1/0
         """
-        
-        response1 = self.session.post(self.login_url.format(username, password), headers={**self.headers1, 'content-length': "0"})
-        if response1.url == 'https://www.yunchengji.net/app/student/session/fail':
+        response = self.session.post(self.login_url.format(username, password), headers={**self.headers1, 'content-length': "0"})
+        if response.url == 'https://www.yunchengji.net/app/student/session/fail':
             return -1
         return 0
 
-    def get_exam_list(self):
+    def get_user_info(self)->dict:
+        """
+        获取用户信息
+        :return: userinfo
+        """
+        response = self.session.post(self.user_info_url,headers={**self.headers1, 'content-length': "0"})
+        result = response.json()['desc']
+        return result
+
+    def get_exam_list(self)->dict:
         """
         获取考试列表
         :return:exams
@@ -56,29 +65,27 @@ class YunchengjiAPI:
         result = response.json()['desc']['selist']
         return result
 
-    def get_exam_detail_total(self,exam_id):
+    def get_exam_detail_total(self,exam_id:str)->dict:
         """
         获取考试详情
         :param exam_id: 考试id
         :return: exam_detail
         """
-        
         response = self.session.get(self.total_url.format(exam_id), headers=self.headers2)
         result = response.json()['desc']
         return result
 
-    def get_subject_list(self,exam_id):
+    def get_subject_list(self,exam_id:str)->dict:
         """
         获取科目列表
         :param exam_id: 考试id
         :return: subject_list
         """
-    
         response = self.session.get(self.subject_list_url.format(exam_id), headers=self.headers2)
         result = response.json()['desc']
         return result
 
-    def get_exam_detail_subject(self,exam_id,subject_id):
+    def get_exam_detail_subject(self,exam_id:str,subject_id:int)->dict:
         """
         获取单科数据
         :param exam_id: 考试id
@@ -89,7 +96,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
-    def get_exam_detail_subject_questions(self,exam_id,subject_id):
+    def get_exam_detail_subject_questions(self,exam_id:str,subject_id:int)->dict:
         """
         获取单科小分
         :param exam_id:考试id
@@ -100,7 +107,7 @@ class YunchengjiAPI:
         result = response.json()['desc']['questions']
         return result
 
-    def logout(self) -> str | None:
+    def logout(self) -> str:
         """
         登出
         :return: session_id
