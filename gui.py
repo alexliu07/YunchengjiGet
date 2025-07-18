@@ -52,9 +52,10 @@ class YunchengjiGUI:
         self.custom_box = ttk.Frame()
         self.select_input = ttk.Combobox()
         self.custom_exam_id = tkinter.StringVar()
-        self.select_exam_name = tkinter.StringVar()
         self.select_component()
 
+        self.custom_load_msg = tkinter.StringVar()
+        self.custom_load_msg.set('请先登录、选择考试并加载数据')
         self.result_notebook = ttk.Notebook()
         self.load_hint = ttk.Label()
         self.result_component()
@@ -73,6 +74,17 @@ class YunchengjiGUI:
             with open(self.session_id_path, "r", encoding='utf-8') as f:
                 session_id = f.read()
         self.api = YunchengjiAPI(session_id)
+
+        # 考试信息
+        self.exam_list = {}
+        self.target_exam_id = ''
+        self.exam_result_total = {}
+        self.subject_list = {}
+        self.exam_result_subject = {}
+        self.exam_result_subject_questions = {}
+
+        # 加载数据
+        self.load_thread_pool = []
 
         self.root.mainloop()
 
@@ -198,7 +210,7 @@ class YunchengjiGUI:
         select_box = ttk.Frame(select_load_box)
         select_hint = ttk.Label(select_box, text='请选择考试：')
         select_hint.grid(column=0, row=0, sticky='W')
-        self.select_input = ttk.Combobox(select_box, textvariable=self.select_exam_name, width=50, state='readonly')
+        self.select_input = ttk.Combobox(select_box, width=50, state='readonly')
         self.select_input.bind("<<ComboboxSelected>>", self.on_selected)
         self.select_input.grid(column=1, row=0, sticky='W')
         select_box.grid(column=0, row=0, sticky='E', pady=(20, 0), padx=20)
@@ -208,7 +220,7 @@ class YunchengjiGUI:
         custom_input = ttk.Entry(self.custom_box, textvariable=self.custom_exam_id)
         custom_input.grid(column=1, row=0, sticky='W')
         # self.custom_box.grid(column=0, row=1, sticky='W', pady=(10, 0),padx=20)
-        self.load_button = ttk.Button(select_load_box, text='加载数据', state='disabled')
+        self.load_button = ttk.Button(select_load_box, text='加载数据', state='disabled',command=self.load_result)
         self.load_button.grid(column=0, row=2, sticky='W', pady=10, ipadx=30, padx=20)
         select_load_box.grid(column=1, row=0, sticky='W')
 
@@ -232,11 +244,25 @@ class YunchengjiGUI:
         :return: None
         """
         result_box = ttk.Frame(self.root)
-        self.load_hint = ttk.Label(result_box, text='请先登录、选择考试并加载数据')
+        self.load_hint = ttk.Label(result_box, textvariable=self.custom_load_msg)
         self.load_hint.grid(column=0, row=0, sticky='WE', padx=(10, 0), pady=10)
         self.result_notebook = ttk.Notebook(result_box)
         # self.result_notebook.grid(column=0, row=1, sticky='WE', padx=(10, 0),pady=10)
         result_box.grid(column=0, row=1, sticky='WE', columnspan=2)
+
+    def show_result_notebook(self):
+        """
+        显示结果
+        :return: None
+        """
+        self.result_notebook.grid(column=0, row=1, sticky='WE', padx=(10, 0), pady=10)
+
+    def hide_result_notebook(self):
+        """
+        隐藏结果
+        :return: None
+        """
+        self.result_notebook.grid_forget()
 
     def action_component(self):
         """
@@ -265,6 +291,9 @@ class YunchengjiGUI:
             self.total_score_result.heading(f'#{i}', text=headings1[i])
             self.total_score_result.column(f"#{i}", anchor="center")
         self.total_score_result.grid(column=0, row=1, sticky='W', padx=(10, 0), pady=10)
+        scroll_bar = ttk.Scrollbar(total_box,orient='vertical',command=self.total_score_result.yview)
+        self.total_score_result.configure(yscrollcommand=scroll_bar.set)
+        scroll_bar.grid(column=1, row=1, sticky='NS')
         gap_hint = ttk.Label(total_box, text='分数差距')
         gap_hint.grid(column=0, row=2, sticky='W', padx=(10, 0), pady=(10, 0))
         self.total_gap_result = ttk.Treeview(total_box, columns=('class', 'school', 'union'), height=3)
@@ -318,6 +347,9 @@ class YunchengjiGUI:
             subject_question_result.heading(f'#{i}', text=headings4[i])
             subject_question_result.column(f"#{i}", anchor="center")
         subject_question_result.grid(column=0, row=5, sticky='W', padx=(10, 0), pady=10, columnspan=2)
+        scroll_bar = ttk.Scrollbar(subject_box,orient='vertical',command=subject_question_result.yview)
+        subject_question_result.configure(yscrollcommand=scroll_bar.set)
+        scroll_bar.grid(column=1, row=5, sticky='NS')
         self.result_notebook.add(subject_box, text=subject_name)
         return subject_gap_result, subject_lose_result, subject_question_result
 
@@ -426,10 +458,10 @@ class YunchengjiGUI:
         except requests.exceptions.RequestException:
             self.custom_user_msg.set('网络错误')
             return
-        exam_list = {}
+        self.exam_list = {}
         names = []
         for i in result:
-            exam_list[i['name']] = i['id']
+            self.exam_list[i['name']] = i['id']
             names.append(i['name'])
         names.append('自定义考试')
         self.select_input['values'] = names
@@ -459,6 +491,66 @@ class YunchengjiGUI:
         else:
             self.hide_custom_box()
         self.load_button.config(state='normal')
+
+    def result_total(self):
+        """
+        获取全科信息并填充
+        :return: None
+        """
+        self.exam_result_total = self.api.get_exam_detail_total(self.target_exam_id)
+        for i in self.exam_result_total['stuOrder']['subjects']:
+            self.total_score_result.insert("",index='end',text=i['name'],values=('{}/{}'.format(i['score'],i['fullScore']),'{}/{}'.format(i['paperScore'],i['fullScore']),i['classOrder'],i['schoolOrder'],i['unionOrder']))
+        names = ['考生数','最高分','平均分']
+        datas = ['Num','Top','Avg']
+        score_gap = self.exam_result_total['stuOrder']['scoreGap']
+        for i in range(3):
+            self.total_gap_result.insert("",index='end',text=names[i],values=(score_gap['class{}'.format(datas[i])],score_gap['school{}'.format(datas[i])],score_gap['union{}'.format(datas[i])]))
+
+    def load_result(self):
+        """
+        加载数据
+        :return: None
+        """
+        self.load_button.configure(state='disabled')
+        # 清空数据
+        self.hide_result_notebook()
+        self.clear_data()
+        select = self.select_input.get()
+        if select == '自定义考试':
+            self.target_exam_id = self.custom_exam_id.get()
+        else:
+            self.target_exam_id = self.exam_list[select]
+        self.custom_load_msg.set('加载数据中...')
+        total_thread = threading.Thread(target=self.result_total)
+        total_thread.start()
+        self.load_thread_pool.append(total_thread)
+
+        wait_thread = threading.Thread(target=self.wait_for_loading)
+        wait_thread.start()
+
+    def clear_data(self):
+        """
+        清空数据
+        :return: None
+        """
+        self.total_score_result.delete(*self.total_score_result.get_children())
+        self.total_gap_result.delete(*self.total_gap_result.get_children())
+        for i in range(1,len(self.result_notebook.winfo_children())):
+            self.result_notebook.forget(i)
+
+
+    def wait_for_loading(self):
+        """
+        等待所有数据加载完成
+        :return: None
+        """
+        for i in self.load_thread_pool:
+            i.join()
+        self.custom_load_msg.set(self.exam_result_total['examName'])
+        self.show_result_notebook()
+        self.load_button.configure(state='normal')
+        self.output_xlsx_button.configure(state='normal')
+        self.output_txt_button.configure(state='normal')
 
 
 if __name__ == '__main__':
