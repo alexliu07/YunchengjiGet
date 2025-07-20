@@ -56,7 +56,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
-    def get_exam_list(self)->dict:
+    def get_exam_list(self)->list:
         """
         获取考试列表
         :return:exams
@@ -75,7 +75,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
-    def get_subject_list(self,exam_id:str)->dict:
+    def get_subject_list(self,exam_id:str)->list:
         """
         获取科目列表
         :param exam_id: 考试id
@@ -96,7 +96,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
-    def get_exam_detail_subject_questions(self,exam_id:str,subject_id:int)->dict:
+    def get_exam_detail_subject_questions(self,exam_id:str,subject_id:int)->list:
         """
         获取单科小分
         :param exam_id:考试id
