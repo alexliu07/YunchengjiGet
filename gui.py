@@ -84,7 +84,8 @@ class YunchengjiGUI:
         self.exam_result_subject_questions = {}
 
         # 加载数据
-        self.load_thread_pool = []
+        self.total_thread = threading.Thread()
+        self.subject_thread = threading.Thread()
 
         self.root.mainloop()
 
@@ -304,7 +305,7 @@ class YunchengjiGUI:
         self.total_gap_result.grid(column=0, row=3, sticky='W', padx=(10, 0), pady=10)
         self.result_notebook.add(total_box, text='全科')
 
-    def subject_result(self, subject_name: str) -> tuple[Treeview, Treeview, Treeview]:
+    def subject_result(self, subject_name: str) -> tuple[Treeview,Treeview, Treeview, Treeview]:
         """
         单科成绩
         :param subject_name: 科目名称
@@ -351,7 +352,7 @@ class YunchengjiGUI:
         subject_question_result.configure(yscrollcommand=scroll_bar.set)
         scroll_bar.grid(column=1, row=5, sticky='NS')
         self.result_notebook.add(subject_box, text=subject_name)
-        return subject_gap_result, subject_lose_result, subject_question_result
+        return subject_score_result, subject_gap_result, subject_lose_result, subject_question_result
 
     # --------------------------------程序逻辑部分--------------------------------
     def login(self):
@@ -413,6 +414,10 @@ class YunchengjiGUI:
         # 清除内容
         if mode == 'button':
             self.select_input['values'] = []
+            self.output_txt_button.configure(state='disabled')
+            self.output_xlsx_button.configure(state='disabled')
+            self.load_button.configure(state='disabled')
+            self.select_input.set('')
             self.hide_user_msg_box()
             self.hide_user_box()
             self.show_login_box()
@@ -437,6 +442,8 @@ class YunchengjiGUI:
         :return: None
         """
         self.start_logout_thread('button')
+        self.clear_data()
+        self.custom_load_msg.set('请先登录、选择考试并加载数据')
 
     def on_window_closing(self):
         """
@@ -506,14 +513,63 @@ class YunchengjiGUI:
         for i in range(3):
             self.total_gap_result.insert("",index='end',text=names[i],values=(score_gap['class{}'.format(datas[i])],score_gap['school{}'.format(datas[i])],score_gap['union{}'.format(datas[i])]))
 
+    def result_each_subject(self,subject_id:int,score_result:ttk.Treeview, gap_result:ttk.Treeview, lose_result:ttk.Treeview, question_result:ttk.Treeview):
+        """
+        获取并填充单科信息
+        :param question_result: treeview
+        :param lose_result: treeview
+        :param gap_result: treeview
+        :param score_result: treeview
+        :param subject_id: 科目id
+        :return:None
+        """
+        result1 = self.api.get_exam_detail_subject(self.target_exam_id, subject_id)
+        result2 = self.api.get_exam_detail_subject_questions(self.target_exam_id, subject_id)
+
+        for i in self.exam_result_total['stuOrder']['subjects']:
+            if i['id'] == subject_id:
+                score_result.insert("",index='end',text=i['name'],values=('{}/{}'.format(i['score'],i['fullScore']),'{}/{}'.format(i['paperScore'],i['fullScore']),i['classOrder'],i['schoolOrder'],i['unionOrder']))
+                break
+        names1 = ['考生数', '最高分', '平均分']
+        datas1 = ['Num', 'Top', 'Avg']
+        score_gap = result1['stuOrder']['scoreGap']
+        for i in range(3):
+            gap_result.insert("", index='end', text=names1[i], values=(score_gap['class{}'.format(datas1[i])],
+                                                                                 score_gap['school{}'.format(datas1[i])],
+                                                                                 score_gap['union{}'.format(datas1[i])]))
+        names2 = ['题量','分值','丢分','得分率']
+        datas2=['ScoreCount','TotalScore','Score','TotalRateScore']
+        for i in range(4):
+            lose_result.insert("",index='end',text=names2[i],values=(result1['lose{}1'.format(datas2[i])],result1['lose{}2'.format(datas2[i])],result1['lose{}3'.format(datas2[i])]))
+        for i in range(len(result1['questRates'])):
+            question_result.insert("",index='end',text=result1['questRates'][i]['title'],values=('{}/{}'.format(result2[i]['score'],result2[i]['totalScore']),result1['questRates'][i]['scoreRate'],result1['questRates'][i]['classScoreRate'],result1['questRates'][i]['schoolScoreRate'],result1['questRates'][i]['unionScoreRate']))
+
+    def result_subjects(self):
+        """
+        获取所有单科信息并填充
+        :return: None
+        """
+        # 获取科目列表
+        self.subject_list = self.api.get_subject_list(self.target_exam_id)
+        threads = []
+        # 获取成绩
+        for i in self.subject_list:
+            score_result, gap_result, lose_result, question_result = self.subject_result(i['name'])
+            thread = threading.Thread(target=self.result_each_subject,args=(i['id'],score_result, gap_result, lose_result, question_result))
+            thread.start()
+            threads.append(thread)
+        for i in threads:
+            i.join()
+
     def load_result(self):
         """
         加载数据
         :return: None
         """
         self.load_button.configure(state='disabled')
+        self.output_txt_button.configure(state='disabled')
+        self.output_xlsx_button.configure(state='disabled')
         # 清空数据
-        self.hide_result_notebook()
         self.clear_data()
         select = self.select_input.get()
         if select == '自定义考试':
@@ -521,10 +577,10 @@ class YunchengjiGUI:
         else:
             self.target_exam_id = self.exam_list[select]
         self.custom_load_msg.set('加载数据中...')
-        total_thread = threading.Thread(target=self.result_total)
-        total_thread.start()
-        self.load_thread_pool.append(total_thread)
-
+        self.total_thread = threading.Thread(target=self.result_total)
+        self.total_thread.start()
+        self.subject_thread = threading.Thread(target=self.result_subjects)
+        self.subject_thread.start()
         wait_thread = threading.Thread(target=self.wait_for_loading)
         wait_thread.start()
 
@@ -533,10 +589,12 @@ class YunchengjiGUI:
         清空数据
         :return: None
         """
+        self.hide_result_notebook()
         self.total_score_result.delete(*self.total_score_result.get_children())
         self.total_gap_result.delete(*self.total_gap_result.get_children())
-        for i in range(1,len(self.result_notebook.winfo_children())):
-            self.result_notebook.forget(i)
+        for i in self.result_notebook.winfo_children():
+            i.destroy()
+        self.total_result()
 
 
     def wait_for_loading(self):
@@ -544,8 +602,8 @@ class YunchengjiGUI:
         等待所有数据加载完成
         :return: None
         """
-        for i in self.load_thread_pool:
-            i.join()
+        self.total_thread.join()
+        self.subject_thread.join()
         self.custom_load_msg.set(self.exam_result_total['examName'])
         self.show_result_notebook()
         self.load_button.configure(state='normal')
