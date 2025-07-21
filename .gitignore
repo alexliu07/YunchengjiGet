@@ -2,7 +2,7 @@ session_id.txt
 /output/
 /build/
 /dist/
-main.spec
+legacy.spec
 test.py
 test.spec
 gui.spec

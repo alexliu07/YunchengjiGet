@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 import tkinter
@@ -21,11 +22,15 @@ class YunchengjiGUI:
         sv_ttk.set_theme(darkdetect.theme())
         self.root.protocol('WM_DELETE_WINDOW', self.on_window_closing)
 
-        # 相关路径
+        # 相关路径和常量
         self.work_dir = os.path.join(os.environ.get('APPDATA', './'), 'yunchengjiget')
         if not os.path.exists(self.work_dir):
             os.mkdir(self.work_dir)
-        self.session_id_path = os.path.join(self.work_dir, 'session_id.txt')
+        self.config_path = os.path.join(self.work_dir, 'config.json')
+        self.config = {}
+        if not os.path.exists(self.config_path):
+            self.init_config()
+        self.load_config()
 
         # 状态常量
         self.login_state = 0
@@ -70,11 +75,7 @@ class YunchengjiGUI:
         self.total_result()
 
         # API接口
-        session_id = str(uuid.uuid4())
-        if os.path.exists(self.session_id_path):
-            with open(self.session_id_path, "r", encoding='utf-8') as f:
-                session_id = f.read()
-        self.api = YunchengjiAPI(session_id)
+        self.api = YunchengjiAPI(self.config['session_id'])
 
         # 考试信息
         self.exam_list = {}
@@ -105,6 +106,31 @@ class YunchengjiGUI:
         self.datas5 = ['ScoreCount', 'TotalScore', 'Score', 'TotalRateScore']
 
         self.root.mainloop()
+
+    # --------------------------------配置文件相关--------------------------------
+    def init_config(self):
+        """
+        初始化设置
+        :return: None
+        """
+        self.config = {"session_id": str(uuid.uuid4())}
+        self.save_config()
+
+    def load_config(self):
+        """
+        加载设置
+        :return: None
+        """
+        with open(self.config_path, 'r', encoding='utf-8') as f:
+            self.config = json.load(f)
+
+    def save_config(self):
+        """
+        保存设置
+        :return: None
+        """
+        with open(self.config_path, 'w+', encoding='utf-8') as f:
+            json.dump(self.config, f)
 
     # --------------------------------UI界面部分--------------------------------
     def login_component(self):
@@ -428,8 +454,8 @@ class YunchengjiGUI:
             elif mode == 'window':
                 self.root.quit()
             return
-        with open(self.session_id_path, 'w+', encoding='utf-8') as f:
-            f.write(new_session_id)
+        self.config['session_id'] = new_session_id
+        self.save_config()
         # 清除内容
         if mode == 'button':
             self.select_input['values'] = []
