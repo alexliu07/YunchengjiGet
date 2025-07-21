@@ -4,6 +4,7 @@ import tkinter
 import uuid
 from tkinter import ttk,filedialog
 
+import openpyxl
 import requests.exceptions
 
 from api import YunchengjiAPI
@@ -87,6 +88,21 @@ class YunchengjiGUI:
         self.total_thread = threading.Thread()
         self.subject_thread = threading.Thread()
         self.lock = threading.Lock()
+
+        # 导出
+        self.text1 = '{}  实际成绩：{:<7}/{:<7} 卷面成绩：{:<7}/{:<7} 班级排名：{:<3} 学校排名：{:<5} 全市排名：{:<6}'
+        self.text2 = '考生数  班级：{:<7} 学校：{:<7} 全市：{:<7}\n最高分  班级：{:<7} 学校：{:<7} 全市：{:<7}\n平均分  班级：{:<7} 学校：{:<7} 全市：{:<7}'
+        self.text3 = '题量  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n分值  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n丢分  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n得分  简单题：{:<7} 中等题：{:<7} 难题：{:<7}'
+        self.text4 = '{:<8} 得分：{:<5}/{:<5} 我的得分率：{:<7} 班得分率：{:<7} 校得分率：{:<7} 市得分率：{:<7}'
+        self.headings1 = ['科目', '实际成绩', '卷面成绩', '班级排名', '学校排名', '全市排名']
+        self.headings2 = ['数据', '班级', '学校', '全市']
+        self.headings3 = ['数据', '简单题', '中等题', '难题']
+        self.headings4 = ['题目','得分','我的得分率','班得分率','校得分率','市得分率']
+        self.datas1 = ['考生数', '最高分', '平均分']
+        self.datas2 = ['class', 'school', 'union']
+        self.datas3 = ['Num', 'Top', 'Avg']
+        self.datas4 = ['题量', '分值', '丢分', '得分率']
+        self.datas5 = ['ScoreCount', 'TotalScore', 'Score', 'TotalRateScore']
 
         self.root.mainloop()
 
@@ -276,7 +292,7 @@ class YunchengjiGUI:
         hint_text.grid(column=0, row=0, sticky='E', padx=(0, 10), pady=10)
         self.output_txt_button = ttk.Button(action_box, text='导出为文本文件', state='disabled',command=self.save_to_txt)
         self.output_txt_button.grid(column=1, row=0, sticky='E', padx=(0, 10), pady=10)
-        self.output_xlsx_button = ttk.Button(action_box, text='导出为表格文件', state='disabled')
+        self.output_xlsx_button = ttk.Button(action_box, text='导出为表格文件', state='disabled',command=self.save_to_xlsx)
         self.output_xlsx_button.grid(column=2, row=0, sticky='E', padx=(0, 10), pady=10)
         action_box.grid(column=1, row=2, sticky='E', pady=(10, 0))
 
@@ -624,19 +640,15 @@ class YunchengjiGUI:
         :param path 路径
         :return: None
         """
-        text1 = '{}  实际成绩：{:<7}/{:<7} 卷面成绩：{:<7}/{:<7} 班级排名：{:<3} 学校排名：{:<5} 全市排名：{:<6}'
-        text2 = '考生数  班级：{:<7} 学校：{:<7} 全市：{:<7}\n最高分  班级：{:<7} 学校：{:<7} 全市：{:<7}\n平均分  班级：{:<7} 学校：{:<7} 全市：{:<7}'
-        text3 = '题量  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n分值  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n丢分  简单题：{:<7} 中等题：{:<7} 难题：{:<7}\n得分  简单题：{:<7} 中等题：{:<7} 难题：{:<7}'
-        text4 = '{:<8} 得分：{:<5}/{:<5} 我的得分率：{:<7} 班得分率：{:<7} 校得分率：{:<7} 市得分率：{:<7}'
         output = [self.exam_result_total['examName'], '全科', '成绩单']
         for subject in self.exam_result_total['stuOrder']['subjects']:
-            output.append(text1.format(subject['name'], subject['score'], subject['fullScore'], subject['paperScore'],
+            output.append(self.text1.format(subject['name'], subject['score'], subject['fullScore'], subject['paperScore'],
                                        subject['fullScore'], subject['classOrder'], subject['schoolOrder'],
                                        subject['unionOrder']))
         output.append('分数差距')
         score_gap = self.exam_result_total['stuOrder']['scoreGap']
         output.append(
-            text2.format(score_gap['classNum'], score_gap['schoolNum'], score_gap['unionNum'], score_gap['classTop'],
+            self.text2.format(score_gap['classNum'], score_gap['schoolNum'], score_gap['unionNum'], score_gap['classTop'],
                          score_gap['schoolTop'], score_gap['unionTop'], score_gap['classAvg'], score_gap['schoolAvg'],
                          score_gap['unionAvg']))
         output.append('')
@@ -644,18 +656,18 @@ class YunchengjiGUI:
             output.append(subject['name'])
             for i in self.exam_result_total['stuOrder']['subjects']:
                 if i['id'] == subject['id']:
-                    output.append(text1.format(i['name'], i['score'], i['fullScore'], i['paperScore'],
+                    output.append(self.text1.format(i['name'], i['score'], i['fullScore'], i['paperScore'],
                                        i['fullScore'], i['classOrder'], i['schoolOrder'],
                                        i['unionOrder']))
                     break
             output.append('分数差距')
             score_gap = self.exam_result_subject[subject['id']]['stuOrder']['scoreGap']
             output.append(
-                text2.format(score_gap['classNum'], score_gap['schoolNum'], score_gap['unionNum'], score_gap['classTop'],
+                self.text2.format(score_gap['classNum'], score_gap['schoolNum'], score_gap['unionNum'], score_gap['classTop'],
                              score_gap['schoolTop'], score_gap['unionTop'], score_gap['classAvg'], score_gap['schoolAvg'],
                              score_gap['unionAvg']))
             output.append('难度失分分析')
-            output.append(text3.format(self.exam_result_subject[subject['id']]['loseScoreCount1'], self.exam_result_subject[subject['id']]['loseScoreCount2'],
+            output.append(self.text3.format(self.exam_result_subject[subject['id']]['loseScoreCount1'], self.exam_result_subject[subject['id']]['loseScoreCount2'],
                                        self.exam_result_subject[subject['id']]['loseScoreCount3'], self.exam_result_subject[subject['id']]['loseTotalScore1'],
                                        self.exam_result_subject[subject['id']]['loseTotalScore2'], self.exam_result_subject[subject['id']]['loseTotalScore3'],
                                        self.exam_result_subject[subject['id']]['loseScore1'], self.exam_result_subject[subject['id']]['loseScore2'],
@@ -663,7 +675,7 @@ class YunchengjiGUI:
                                        self.exam_result_subject[subject['id']]['loseTotalRateScore2'], self.exam_result_subject[subject['id']]['loseTotalRateScore3']))
             output.append('小分情况')
             for j in range(len(self.exam_result_subject[subject['id']]['questRates'])):
-                output.append(text4.format(self.exam_result_subject[subject['id']]['questRates'][j]['title'], self.exam_result_subject_questions[subject['id']][j]['score'],
+                output.append(self.text4.format(self.exam_result_subject[subject['id']]['questRates'][j]['title'], self.exam_result_subject_questions[subject['id']][j]['score'],
                                            self.exam_result_subject_questions[subject['id']][j]['totalScore'], self.exam_result_subject[subject['id']]['questRates'][j]['scoreRate'],
                                            self.exam_result_subject[subject['id']]['questRates'][j]['classScoreRate'],
                                            self.exam_result_subject[subject['id']]['questRates'][j]['schoolScoreRate'],
@@ -675,12 +687,98 @@ class YunchengjiGUI:
 
     def save_to_txt(self):
         """
-        将结果保存到文本文件
+        将结果保存到文本文件(按钮绑定函数)
         :return: None
         """
         path = filedialog.asksaveasfilename(title='导出为文本文件',filetypes=(('文本文件','.txt'),),initialfile='{}-{}'.format(self.student_name.get(),self.exam_result_total['examName']),defaultextension='.txt')
         self.custom_save_msg.set('保存中...')
         save_thread = threading.Thread(target=self.output_txt, args=(path,))
+        save_thread.start()
+
+    def output_xlsx(self,path:str):
+        """
+        保存表格
+        :param path: 保存路径
+        :return: None
+        """
+        book = openpyxl.Workbook()
+        total = book.active
+        total.title = '全科'
+        # 全科
+        total['A1'] = '成绩单'
+        for i in range(6):
+            total['{}2'.format(chr(65+i))] = self.headings1[i]
+        i = 3
+        for subject in self.exam_result_total['stuOrder']['subjects']:
+            data = [subject['name'],'{}/{}'.format(subject['score'], subject['fullScore']),'{}/{}'.format(subject['paperScore'], subject['fullScore']),subject['classOrder'],subject['schoolOrder'],subject['unionOrder']]
+            for j in range(6):
+                total['{}{}'.format(chr(65+j), i)] = data[j]
+            i += 1
+        i += 1
+        score_gap = self.exam_result_total['stuOrder']['scoreGap']
+        total['A{}'.format(i)] = '分数差距'
+        i+=1
+        for j in range(4):
+            total['{}{}'.format(chr(65+j), i)] = self.headings2[j]
+        i+=1
+        for j in range(3):
+            total['A{}'.format(i)] = self.datas1[j]
+            for k in range(3):
+                total['{}{}'.format(chr(66+k), i)] = score_gap['{}{}'.format(self.datas2[k],self.datas3[j])]
+            i+=1
+        # 单科
+        for subject in self.subject_list:
+            sheet = book.create_sheet(subject['name'])
+            sheet['A1'] = '成绩单'
+            for j in range(6):
+                sheet['{}2'.format(chr(65 + j))] = self.headings1[j]
+            for j in self.exam_result_total['stuOrder']['subjects']:
+                if j['id'] == subject['id']:
+                    data = [j['name'], '{}/{}'.format(j['score'], j['fullScore']),
+                            '{}/{}'.format(j['paperScore'], j['fullScore']), j['classOrder'],
+                            j['schoolOrder'], j['unionOrder']]
+                    for k in range(6):
+                        sheet['{}3'.format(chr(65 + k))] = data[k]
+                    break
+            sheet['A5'] = '分数差距'
+            score_gap = self.exam_result_subject[subject['id']]['stuOrder']['scoreGap']
+            for j in range(4):
+                sheet['{}6'.format(chr(65 + j))] = self.headings2[j]
+            for j in range(3):
+                sheet['A{}'.format(7+j)] = self.datas1[j]
+                for k in range(3):
+                    sheet['{}{}'.format(chr(66 + k), 7+j)] = score_gap['{}{}'.format(self.datas2[k], self.datas3[j])]
+            sheet['A11'] = '难度失分分析'
+            for j in range(4):
+                sheet['{}12'.format(chr(65 + j))] = self.headings3[j]
+            for j in range(4):
+                sheet['A{}'.format(13+j)] = self.datas4[j]
+                for k in range(3):
+                    sheet['{}{}'.format(chr(66 + k), 13+j)] = self.exam_result_subject[subject['id']]['lose{}{}'.format(self.datas5[k],k+1)]
+            sheet['A18'] = '小分情况'
+            for j in range(6):
+                sheet['{}19'.format(chr(65 + j))] = self.headings4[j]
+            i = 20
+            for j in range(len(self.exam_result_subject[subject['id']]['questRates'])):
+                data = [self.exam_result_subject[subject['id']]['questRates'][j]['title'],'{}/{}'.format(self.exam_result_subject_questions[subject['id']][j]['score'], self.exam_result_subject_questions[subject['id']][j]['totalScore']),self.exam_result_subject[subject['id']]['questRates'][j]['scoreRate'],self.exam_result_subject[subject['id']]['questRates'][j]['classScoreRate'],self.exam_result_subject[subject['id']]['questRates'][j]['schoolScoreRate'],self.exam_result_subject[subject['id']]['questRates'][j]['unionScoreRate']]
+                for k in range(6):
+                    sheet['{}{}'.format(chr(65+k),i)] = data[k]
+                i += 1
+        # 保存
+        book.save(path)
+        self.custom_save_msg.set('数据已保存')
+
+    def save_to_xlsx(self):
+        """
+        导出到表格文件(按钮绑定)
+        :return: None
+        """
+        path = filedialog.asksaveasfilename(title='导出为表格文件', filetypes=(('表格文件', '.xlsx'),),
+                                            initialfile='{}-{}'.format(self.student_name.get(),
+                                                                       self.exam_result_total['examName']),
+                                            defaultextension='.xlsx')
+        self.custom_save_msg.set('保存中...')
+        save_thread = threading.Thread(target=self.output_xlsx, args=(path,))
         save_thread.start()
 
 if __name__ == '__main__':
