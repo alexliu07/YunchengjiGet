@@ -409,14 +409,17 @@ class YunchengjiGUI:
             login_result = self.api.login(self.username.get(), self.password.get())
         except requests.exceptions.RequestException:
             self.custom_login_msg.set('网络错误')
+            self.login_button.configure(state='normal')
             return
         if login_result == -1:
             self.custom_login_msg.set('用户名或密码错误')
+            self.login_button.configure(state='normal')
             return
         try:
             user_info = self.api.get_user_info()
         except requests.exceptions.RequestException:
             self.custom_login_msg.set('网络错误')
+            self.login_button.configure(state='normal')
             return
         self.login_state = 1
         self.student_name.set(user_info['childname'])
@@ -451,6 +454,7 @@ class YunchengjiGUI:
         except requests.exceptions.RequestException:
             if mode == 'button':
                 self.custom_user_msg.set('网络错误')
+                self.logout_button.configure(state='normal')
             elif mode == 'window':
                 self.root.quit()
             return
