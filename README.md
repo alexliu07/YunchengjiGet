@@ -6,7 +6,7 @@
 * 单科小分、最高分、平均分、得分率
 
 #### 使用
-需要requests, openpyxl库<br>
+需要requests, openpyxl, darkdetect, sv_ttk库<br>
 下载api.py和gui.py，运行gui.py<br>
 ~~并按照提示输入用户名(手机号)和密码，选择考试<br>
 也可以手动输入考试ID获取（适用于已经有成绩但在列表里未显示的考试，考试ID为6位数字）<br>
