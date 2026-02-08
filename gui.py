@@ -22,6 +22,7 @@ class YunchengjiGUI:
         self.root.title('Yunchengji')
         sv_ttk.set_theme(darkdetect.theme())
         self.root.protocol('WM_DELETE_WINDOW', self.on_window_closing)
+        self.root.state('zoomed')
 
         # Scrollable content wrapper
         self._init_scrollable_root()
@@ -160,8 +161,12 @@ class YunchengjiGUI:
         self.page.bind('<Configure>', on_frame_configure)
         self.canvas.bind('<Configure>', on_canvas_configure)
 
-        # Mouse wheel support (Windows)
+        # Mouse wheel support (Windows): prefer inner scrollables (e.g., Treeview)
         def on_mousewheel(event):
+            widget = event.widget
+            if widget.winfo_class() == 'Treeview':
+                widget.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+                return
             self.canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
 
         self.canvas.bind_all('<MouseWheel>', on_mousewheel)
