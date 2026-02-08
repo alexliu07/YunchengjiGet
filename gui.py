@@ -682,6 +682,11 @@ class YunchengjiGUI:
         """
         self.hide_result_notebook()
         self.custom_save_msg.set('')
+        # Reset cached data to avoid exporting stale results
+        self.exam_result_total = {}
+        self.subject_list = []
+        self.exam_result_subject = {}
+        self.exam_result_subject_questions = {}
         self.total_score_result.delete(*self.total_score_result.get_children())
         self.total_gap_result.delete(*self.total_gap_result.get_children())
         for i in self.result_notebook.winfo_children():
@@ -825,9 +830,9 @@ class YunchengjiGUI:
             for j in range(4):
                 sheet['{}12'.format(chr(65 + j))] = self.headings3[j]
             for j in range(4):
-                sheet['A{}'.format(13+j)] = self.datas4[j]
+                sheet['A{}'.format(13 + j)] = self.datas4[j]
                 for k in range(3):
-                    sheet['{}{}'.format(chr(66 + k), 13+j)] = self.exam_result_subject[subject['id']]['lose{}{}'.format(self.datas5[k],k+1)]
+                    sheet['{}{}'.format(chr(66 + k), 13 + j)] = self.exam_result_subject[subject['id']]['lose{}{}'.format(self.datas5[j], k + 1)]
             sheet['A18'] = '小分情况'
             for j in range(6):
                 sheet['{}19'.format(chr(65 + j))] = self.headings4[j]
