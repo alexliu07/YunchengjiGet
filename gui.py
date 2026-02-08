@@ -1,9 +1,10 @@
 import json
 import os
 import threading
+import time
 import tkinter
 import uuid
-from tkinter import ttk,filedialog
+from tkinter import ttk,filedialog,messagebox
 
 import openpyxl
 import requests.exceptions
@@ -21,6 +22,9 @@ class YunchengjiGUI:
         self.root.title('Yunchengji')
         sv_ttk.set_theme(darkdetect.theme())
         self.root.protocol('WM_DELETE_WINDOW', self.on_window_closing)
+
+        # Scrollable content wrapper
+        self._init_scrollable_root()
 
         # 相关路径和常量
         self.work_dir = os.path.join(os.environ.get('APPDATA', './'), 'yunchengjiget')
@@ -69,6 +73,8 @@ class YunchengjiGUI:
         self.output_txt_button = ttk.Button()
         self.custom_save_msg = tkinter.StringVar()
         self.action_component()
+        # 扫描组件（按 ID 顺序访问并检测关键词）
+        self.scan_component()
 
         self.total_score_result = ttk.Treeview()
         self.total_gap_result = ttk.Treeview()
@@ -133,12 +139,39 @@ class YunchengjiGUI:
             json.dump(self.config, f)
 
     # --------------------------------UI界面部分--------------------------------
+    def _init_scrollable_root(self):
+        """Create a scrollable container for the whole page."""
+        self.canvas = tkinter.Canvas(self.root, highlightthickness=0)
+        self.v_scroll = ttk.Scrollbar(self.root, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.v_scroll.set)
+        self.v_scroll.pack(side='right', fill='y')
+        self.canvas.pack(side='left', fill='both', expand=True)
+
+        self.page = ttk.Frame(self.canvas)
+        self.page_window = self.canvas.create_window((0, 0), window=self.page, anchor='nw')
+
+        def on_frame_configure(event):
+            self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+
+        def on_canvas_configure(event):
+            # Keep the content width synced to the canvas width
+            self.canvas.itemconfigure(self.page_window, width=event.width)
+
+        self.page.bind('<Configure>', on_frame_configure)
+        self.canvas.bind('<Configure>', on_canvas_configure)
+
+        # Mouse wheel support (Windows)
+        def on_mousewheel(event):
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+
+        self.canvas.bind_all('<MouseWheel>', on_mousewheel)
+
     def login_component(self):
         """
         登录组件
         :return:None
         """
-        self.login_box = ttk.Frame(self.root)
+        self.login_box = ttk.Frame(self.page)
         username_box = ttk.Frame(self.login_box)
         username_hint = ttk.Label(username_box, text='用户名：')
         username_hint.grid(column=0, row=0, sticky='W')
@@ -191,7 +224,7 @@ class YunchengjiGUI:
         用户信息显示组件
         :return: None
         """
-        self.user_box = ttk.Frame(self.root)
+        self.user_box = ttk.Frame(self.page)
         student_name_box = ttk.Frame(self.user_box)
         student_name_hint = ttk.Label(student_name_box, text='姓名：')
         student_name_hint.grid(column=0, row=0, sticky='W')
@@ -250,7 +283,7 @@ class YunchengjiGUI:
         考试选择组件
         :return: None
         """
-        select_load_box = ttk.Frame(self.root)
+        select_load_box = ttk.Frame(self.page)
         select_box = ttk.Frame(select_load_box)
         select_hint = ttk.Label(select_box, text='请选择考试：')
         select_hint.grid(column=0, row=0, sticky='W')
@@ -287,7 +320,7 @@ class YunchengjiGUI:
         结果展示组件
         :return: None
         """
-        result_box = ttk.Frame(self.root)
+        result_box = ttk.Frame(self.page)
         self.load_hint = ttk.Label(result_box, textvariable=self.custom_load_msg)
         self.load_hint.grid(column=0, row=0, sticky='WE', padx=(10, 0), pady=10)
         self.result_notebook = ttk.Notebook(result_box)
@@ -313,7 +346,7 @@ class YunchengjiGUI:
         操作组件
         :return: None
         """
-        action_box = ttk.Frame(self.root)
+        action_box = ttk.Frame(self.page)
         hint_text = ttk.Label(action_box,textvariable=self.custom_save_msg)
         hint_text.grid(column=0, row=0, sticky='E', padx=(0, 10), pady=10)
         self.output_txt_button = ttk.Button(action_box, text='导出为文本文件', state='disabled',command=self.save_to_txt)
@@ -659,6 +692,11 @@ class YunchengjiGUI:
         self.total_thread.join()
         self.subject_thread.join()
         self.custom_load_msg.set(self.exam_result_total['examName'])
+        # 更新扫描面板的当前考试标题
+        try:
+            self.scan_exam_title_var.set(self.exam_result_total.get('examName',''))
+        except Exception:
+            pass
         self.show_result_notebook()
         self.load_button.configure(state='normal')
         self.output_xlsx_button.configure(state='normal')
@@ -810,6 +848,205 @@ class YunchengjiGUI:
         self.custom_save_msg.set('保存中...')
         save_thread = threading.Thread(target=self.output_xlsx, args=(path,))
         save_thread.start()
+
+    # --------------------------------扫描功能--------------------------------
+    def scan_component(self):
+        """
+        扫描组件：按 ID 范围顺序访问并检测关键词
+        """
+        scan_box = ttk.LabelFrame(self.page, text='ID 扫描')
+        # 输入行
+        start_box = ttk.Frame(scan_box)
+        ttk.Label(start_box, text='起始ID：').grid(column=0, row=0, sticky='W')
+        self.scan_start_id = tkinter.StringVar()
+        ttk.Entry(start_box, textvariable=self.scan_start_id, width=15).grid(column=1, row=0, sticky='W')
+        ttk.Label(start_box, text='结束ID：').grid(column=2, row=0, sticky='W', padx=(10,0))
+        self.scan_end_id = tkinter.StringVar()
+        ttk.Entry(start_box, textvariable=self.scan_end_id, width=15).grid(column=3, row=0, sticky='W')
+        start_box.grid(column=0, row=0, sticky='W', padx=10, pady=(10,0))
+
+        opt_box = ttk.Frame(scan_box)
+        ttk.Label(opt_box, text='步长：').grid(column=0, row=0, sticky='W')
+        self.scan_step = tkinter.StringVar(value='1')
+        ttk.Entry(opt_box, textvariable=self.scan_step, width=6).grid(column=1, row=0, sticky='W')
+        ttk.Label(opt_box, text='关键词（逗号分隔）：').grid(column=2, row=0, sticky='W', padx=(10,0))
+        self.scan_keywords = tkinter.StringVar()
+        ttk.Entry(opt_box, textvariable=self.scan_keywords, width=30).grid(column=3, row=0, sticky='W')
+        opt_box.grid(column=0, row=1, sticky='W', padx=10, pady=(6,0))
+
+        time_box = ttk.Frame(scan_box)
+        ttk.Label(time_box, text='间隔(秒)：').grid(column=0, row=0, sticky='W')
+        self.scan_interval = tkinter.StringVar(value='1')
+        ttk.Entry(time_box, textvariable=self.scan_interval, width=6).grid(column=1, row=0, sticky='W')
+        # 按钮
+        self.start_scan_button = ttk.Button(time_box, text='开始扫描', command=self.start_scan_thread)
+        self.start_scan_button.grid(column=2, row=0, sticky='W', padx=(10,0))
+        self.resume_scan_button = ttk.Button(time_box, text='恢复扫描', command=self.resume_scan, state='disabled')
+        self.resume_scan_button.grid(column=3, row=0, sticky='W', padx=(6,0))
+        self.stop_scan_button = ttk.Button(time_box, text='停止', command=self.stop_scan, state='disabled')
+        self.stop_scan_button.grid(column=4, row=0, sticky='W', padx=(6,0))
+        time_box.grid(column=0, row=2, sticky='W', padx=10, pady=(6,10))
+
+        status_box = ttk.Frame(scan_box)
+        self.scan_status = tkinter.StringVar(value='就绪')
+        ttk.Label(status_box, text='状态：').grid(column=0, row=0, sticky='W')
+        ttk.Label(status_box, textvariable=self.scan_status).grid(column=1, row=0, sticky='W')
+        status_box.grid(column=0, row=3, sticky='W', padx=10, pady=(0,10))
+
+        # 实时显示当前考试标题与当前ID
+        show_box = ttk.Frame(scan_box)
+        ttk.Label(show_box, text='当前考试：').grid(column=0, row=0, sticky='W')
+        self.scan_exam_title_var = tkinter.StringVar(value='')
+        ttk.Label(show_box, textvariable=self.scan_exam_title_var, width=40).grid(column=1, row=0, sticky='W')
+        ttk.Label(show_box, text='当前ID：').grid(column=2, row=0, sticky='W', padx=(10,0))
+        self.scan_current_id_var = tkinter.StringVar(value='')
+        ttk.Label(show_box, textvariable=self.scan_current_id_var).grid(column=3, row=0, sticky='W')
+        show_box.grid(column=0, row=4, sticky='W', padx=10, pady=(0,10))
+
+        scan_box.grid(column=0, row=3, sticky='W', padx=10, pady=(6,0), columnspan=2)
+
+        # 控制变量
+        self.scan_thread = None
+        self.scan_stop_event = threading.Event()
+        self.scan_paused = False
+        self.scan_current_id = None
+        self.scan_end = None
+        self.scan_step_val = 1
+        self.scan_keywords_list = []
+        self.scan_interval_val = 1
+        # 保持 UI 变量的一致性
+        self.scan_exam_title_var.set('')
+        self.scan_current_id_var.set('')
+
+    def start_scan_thread(self):
+        """解析参数并启动扫描线程"""
+        # 解析输入
+        try:
+            start = int(self.scan_start_id.get())
+            end = int(self.scan_end_id.get())
+            step = int(self.scan_step.get())
+            if step == 0:
+                raise ValueError
+        except Exception:
+            messagebox.showerror('参数错误', '请填写合法的起始ID、结束ID和非零步长（整数）')
+            return
+        kws = [k.strip() for k in self.scan_keywords.get().split(',') if k.strip()]
+        try:
+            interval = float(self.scan_interval.get())
+            if interval < 0:
+                raise ValueError
+        except Exception:
+            messagebox.showerror('参数错误', '请填写合法的间隔（秒）')
+            return
+
+        # 保存参数
+        self.scan_stop_event.clear()
+        self.scan_paused = False
+        self.scan_current_id = None
+        self.scan_end = end
+        self.scan_step_val = step
+        self.scan_keywords_list = kws
+        self.scan_interval_val = interval
+
+        # UI 状态
+        self.start_scan_button.configure(state='disabled')
+        self.stop_scan_button.configure(state='normal')
+        self.resume_scan_button.configure(state='disabled')
+        self.scan_status.set('扫描中...')
+        # 设置当前考试标题显示（优先使用已加载的examName）
+        title = ''
+        if isinstance(self.exam_result_total, dict) and self.exam_result_total.get('examName'):
+            title = self.exam_result_total.get('examName')
+        else:
+            sel = self.select_input.get()
+            title = self.custom_exam_id.get() if sel == '自定义考试' else sel
+        self.scan_exam_title_var.set(title)
+
+        # 启动线程
+        self.scan_thread = threading.Thread(target=self.scan, args=(start, end, step, kws, interval))
+        self.scan_thread.start()
+
+    def scan(self, start:int, end:int, step:int, keywords:list, interval:float):
+        """执行扫描循环（在后台线程）"""
+        current = start
+        forward = step > 0
+        def finish(status='完成'):
+            self.root.after(0, lambda: self.scan_status.set(status))
+            self.root.after(0, lambda: self.start_scan_button.configure(state='normal'))
+            self.root.after(0, lambda: self.stop_scan_button.configure(state='disabled'))
+            self.root.after(0, lambda: self.resume_scan_button.configure(state='disabled'))
+
+        while (current <= end if forward else current >= end):
+            if self.scan_stop_event.is_set():
+                finish('已停止')
+                return
+            self.scan_current_id = current
+            # 更新当前ID的 UI 显示
+            self.root.after(0, lambda cid=current: self.scan_current_id_var.set(str(cid)))
+            try:
+                result = self.api.get_exam_detail_total(str(current))
+            except Exception:
+                # 网络错误：更新状态并继续或中止
+                self.root.after(0, lambda: self.scan_status.set(f'网络错误 at {current}'))
+                finish('出错停止')
+                return
+            text = json.dumps(result, ensure_ascii=False)
+            for kw in keywords:
+                if kw and kw in text:
+                    # 调度主线程弹窗并暂停
+                    self.root.after(0, lambda kw=kw, cid=current: messagebox.showwarning('关键词检测', f'检测到关键词 "{kw}" 在 ID {cid}'))
+                    self.scan_paused = True
+                    self.root.after(0, lambda: self.scan_status.set(f'检测到 "{kw}" 于 ID {current}，已暂停'))
+                    self.root.after(0, lambda: self.resume_scan_button.configure(state='normal'))
+                    self.root.after(0, lambda: self.stop_scan_button.configure(state='normal'))
+                    self.root.after(0, lambda: self.start_scan_button.configure(state='disabled'))
+                    # 保持当前ID显示为触发ID
+                    self.root.after(0, lambda cid=current: self.scan_current_id_var.set(str(cid)))
+                    return
+            # 未命中，等待间隔
+            total_sleep = 0.0
+            while total_sleep < interval:
+                if self.scan_stop_event.is_set():
+                    finish('已停止')
+                    return
+                time.sleep(min(0.2, interval - total_sleep))
+                total_sleep += min(0.2, interval - total_sleep)
+            current += step
+
+        finish('扫描结束')
+
+    def resume_scan(self):
+        """从上次检测到的位置继续扫描（从下一个 id 开始）"""
+        if not self.scan_paused or self.scan_current_id is None:
+            return
+        next_id = self.scan_current_id + self.scan_step_val
+        # 检查是否越界
+        if (self.scan_step_val > 0 and next_id > self.scan_end) or (self.scan_step_val < 0 and next_id < self.scan_end):
+            messagebox.showinfo('提示', '没有更多 ID 可扫描')
+            self.scan_status.set('完成')
+            self.start_scan_button.configure(state='normal')
+            self.resume_scan_button.configure(state='disabled')
+            self.stop_scan_button.configure(state='disabled')
+            self.scan_paused = False
+            return
+        # 准备重新开始
+        self.scan_stop_event.clear()
+        self.scan_paused = False
+        self.scan_status.set('恢复扫描中...')
+        self.start_scan_button.configure(state='disabled')
+        self.stop_scan_button.configure(state='normal')
+        self.resume_scan_button.configure(state='disabled')
+        self.scan_thread = threading.Thread(target=self.scan, args=(next_id, self.scan_end, self.scan_step_val, self.scan_keywords_list, self.scan_interval_val))
+        self.scan_thread.start()
+
+    def stop_scan(self):
+        """停止扫描（可由用户手动停止）"""
+        self.scan_stop_event.set()
+        self.scan_paused = False
+        self.scan_status.set('停止中...')
+        self.start_scan_button.configure(state='normal')
+        self.resume_scan_button.configure(state='disabled')
+        self.stop_scan_button.configure(state='disabled')
 
 if __name__ == '__main__':
     app = YunchengjiGUI()
