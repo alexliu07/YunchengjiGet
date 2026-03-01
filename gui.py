@@ -45,6 +45,7 @@ class YunchengjiGUI:
         self.login_button = ttk.Button()
         self.username = tkinter.StringVar()
         self.password = tkinter.StringVar()
+        self.get_extra_exams = tkinter.IntVar()
         self.custom_login_msg = tkinter.StringVar()
         self.login_box = ttk.Frame()
         self.login_component()
@@ -189,8 +190,10 @@ class YunchengjiGUI:
         password_input = ttk.Entry(password_box, textvariable=self.password, show='*', width=20)
         password_input.grid(column=1, row=0, sticky='W')
         password_box.grid(column=0, row=1, sticky='E', pady=(10, 0), padx=20)
+        get_extra_checkbox = ttk.Checkbutton(self.login_box, variable=self.get_extra_exams, text="获取额外考试")
+        get_extra_checkbox.grid(column=0, row=2, sticky='E', pady=(10, 0), padx=20)
         self.login_button = ttk.Button(self.login_box, text='登录', command=self.start_login_thread)
-        self.login_button.grid(column=0, row=2, sticky='WE', pady=(10, 0), padx=20)
+        self.login_button.grid(column=0, row=3, sticky='WE', pady=(10, 0), padx=20)
         self.login_msg_box = ttk.Frame(self.login_box)
         login_msg_hint = ttk.Label(self.login_msg_box, textvariable=self.custom_login_msg)
         login_msg_hint.grid(column=0, row=0, sticky='W')
@@ -558,6 +561,16 @@ class YunchengjiGUI:
         for i in result:
             self.exam_list[i['name']] = i['id']
             names.append(i['name'])
+        if self.get_extra_exams.get() == 1:
+            try:
+                result = self.api.get_extra_exams()
+            except requests.exceptions.RequestException:
+                self.custom_user_msg.set('网络错误')
+                return
+            for i in result:
+                if i not in names:
+                    names.append(i)
+                    self.exam_list[i] = result[i]
         names.append('自定义考试')
         self.select_input['values'] = names
         self.hide_user_msg_box()

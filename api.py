@@ -1,4 +1,9 @@
+import queue
+import re
+
+from bs4 import BeautifulSoup
 import requests
+from functools import lru_cache
 
 
 class YunchengjiAPI:
@@ -12,6 +17,7 @@ class YunchengjiAPI:
         self.subject_url = "https://www.yunchengji.net/app/student/cj/report-subject?seid={}&subjectid={}"
         self.question_list_url = "https://www.yunchengji.net/app/student/cj/question-list?seid={}&subjectid={}"
         self.logout_url = "https://www.yunchengji.net/app/logout"
+        self.extra_exams_url = "https://www.yunchengji.net/web/student/paperbook/paper?seID={}&subjectID={}"
         # Headers
         self.user_agent_1 = "ycj/5.7.0(Android;12)<okhttp>(<okhttp/3.10.0>)<brand_HONOR,model_SDY-AN00,maker_HONOR,device_Sandy>"
         self.user_agent_2 = "Mozilla/5.0 (Linux; Android 12; SDY-AN00 Build/V417IR; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/89.0.4389.72 MQQBrowser/6.2 TBS/046295 Mobile Safari/537.36"
@@ -47,6 +53,7 @@ class YunchengjiAPI:
             return -1
         return 0
 
+    @lru_cache(maxsize=16)
     def get_user_info(self)->dict:
         """
         获取用户信息
@@ -56,6 +63,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
+    @lru_cache(maxsize=16)
     def get_exam_list(self)->list:
         """
         获取考试列表
@@ -65,6 +73,40 @@ class YunchengjiAPI:
         result = response.json()['desc']['selist']
         return result
 
+    def get_extra_exams(self, start_id=None)->dict:
+        """
+        https://www.yunchengji.net/web/student/paperbook/paper?seID=253305&subjectID=1
+        :return:
+        """
+        if not start_id:
+            l = self.get_exam_list()
+            if len(l) > 0:
+                start_id = l[0]["id"]
+        def get_next(i, d, di=None):
+            if di is None:
+                di = {}
+            response = self.session.get(self.extra_exams_url.format(i, 1), headers=self.headers2)
+            b = BeautifulSoup(response.content, 'html.parser')
+            j = []
+            match d:
+                case "l":
+                    j = b.find_all('a', class_='paper-title3')
+                case "r":
+                    j = b.find_all('a', class_='paper-title1')
+            if len(j) >= 1:
+                i = j[0]
+                if i["href"] != "javascript:void(0);":
+                    r = re.search(r"seID=[^&]+",
+                                  i["href"],
+                                  re.M | re.I)
+                    if r:
+                        id_ = r.group().split("=")[1]
+                        di[i.string] = id_
+                        di = get_next(id_, d, di)
+            return di
+        return get_next(start_id, "r", get_next(start_id, "l"))
+
+    @lru_cache(maxsize=16)
     def get_exam_detail_total(self,exam_id:str)->dict:
         """
         获取考试详情
@@ -75,6 +117,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
+    @lru_cache(maxsize=16)
     def get_subject_list(self,exam_id:str)->list:
         """
         获取科目列表
@@ -85,6 +128,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
+    @lru_cache(maxsize=16)
     def get_exam_detail_subject(self,exam_id:str,subject_id:int)->dict:
         """
         获取单科数据
@@ -96,6 +140,7 @@ class YunchengjiAPI:
         result = response.json()['desc']
         return result
 
+    @lru_cache(maxsize=16)
     def get_exam_detail_subject_questions(self,exam_id:str,subject_id:int)->list:
         """
         获取单科小分
