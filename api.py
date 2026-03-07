@@ -158,4 +158,10 @@ class YunchengjiAPI:
         :return: session_id
         """
         self.session.post(self.logout_url, headers={**self.headers1, 'content-length': "0"})
+        self.get_user_info.cache_clear()
+        self.get_exam_list.cache_clear()
+        self.get_exam_detail_total.cache_clear()
+        self.get_subject_list.cache_clear()
+        self.get_exam_detail_subject.cache_clear()
+        self.get_exam_detail_subject_questions.cache_clear()
         return self.session.cookies.get('SESSIONID',domain='www.yunchengji.net')
