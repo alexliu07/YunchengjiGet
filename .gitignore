@@ -7,3 +7,4 @@ test.py
 test.spec
 gui.spec
 /__pycache__/
+.idea
